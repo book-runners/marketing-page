@@ -16,8 +16,8 @@
     <title>Book Runners</title>
 
     <!-- Styles -->
-    <link href={{ "/assets/css/page.min.css" | absolute_url }} rel="stylesheet">
-    <link href={{ "/assets/css/style.css" | absolute_url }} rel="stylesheet">
+    <link href=http://localhost:4000/assets/css/page.min.css rel="stylesheet">
+    <link href=http://localhost:4000/assets/css/style.css rel="stylesheet">
 
     <!-- Favicons -->
     <link rel="icon" href="../assets/img/favicon.ico">
@@ -36,29 +36,21 @@
 
         <section class="navbar-mobile">
           <nav class="nav nav-navbar ml-auto">
-            {% if page.active == "home" %}
-              <a class="nav-link active" href="/">Home</a>
-            {% else %}
+            
               <a class="nav-link" href="/">Home</a>
-            {% endif %}
+            
 
-            {% if page.active == "services" %}
+            
               <a class="nav-link active" href="/services">Services</a>
-            {% else %}
-              <a class="nav-link" href="/services">Services</a>
-            {% endif %}
+            
 
-            {% if page.active == "employment" %}
-              <a class="nav-link active" href="/employment">Employment</a>
-            {% else %}
+            
               <a class="nav-link" href="/employment">Employment</a>
-            {% endif %}
+            
 
-            {% if page.active == "contact" %}
-              <a class="nav-link active" href="/contact">Contact</a>
-            {% else %}
+            
               <a class="nav-link" href="/contact">Contact</a>
-            {% endif %}
+            
 
           </nav>
         </section>
@@ -67,7 +59,8 @@
     </nav>
     <!-- /.navbar -->
 
-    {{ content }}
+    <h1>hello services world!</h1>
+
 
     <!-- Footer -->
     <footer class="footer">
@@ -94,7 +87,7 @@
     <!-- /.footer -->
 
     <!-- Scripts -->
-    <script src={{ "/assets/js/page.min.js" | absolute_url }}></script>
-    <script src={{ "/assets/js/script.js" | absolute_url }}></script>
+    <script src=http://localhost:4000/assets/js/page.min.js></script>
+    <script src=http://localhost:4000/assets/js/script.js></script>
   </body>
 </html>
