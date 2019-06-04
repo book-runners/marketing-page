@@ -1,6 +1,100 @@
 <!DOCTYPE html>
 <html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="Book Runners was founded in 2017 to distribute books through wholesale and retail channels. Contact us to learn more.">
+    <meta name="keywords" content="Wholesale, textbooks, college, higher ed, k-12, distribution, retail, books, university">
+
+    <!--  Open Graph Tags -->
+    <meta property="og:title" content=">Book Runners">
+    <meta property="og:description" content="Book Runners was founded in 2017 to distribute books through wholesale and retail channels. Contact us to learn more.">
+    <meta property="og:url" content="http://book-runners.com/">
+    <meta property="og:type" content="website">
+
+    <!-- Title for tabs -->
+    <title>Book Runners</title>
+
+    <!-- Styles -->
+    <link href={{ "/assets/css/page.min.css" | absolute_url }} rel="stylesheet">
+    <link href={{ "/assets/css/style.css" | absolute_url }} rel="stylesheet">
+
+    <!-- Favicons -->
+    <link rel="icon" href="../assets/img/favicon.ico">
+  </head>
   <body>
-     {{ content }}
+    <!-- navbar -->
+    <nav class="navbar navbar-expand-lg navbar-light">
+      <div class="container">
+
+        <div class="navbar-left">
+          <button class="navbar-toggler" type="button">&#9776;</button>
+          <a class="navbar-brand" href="#">
+            <img class="logo-light" src="../assets/img/white_logo_transparent.png" alt="logo">
+          </a>
+        </div>
+
+        <section class="navbar-mobile">
+          <nav class="nav nav-navbar ml-auto">
+            {% if page.active == "home" %}
+              <a class="nav-link active" href="#">Home</a>
+            {% else %}
+              <a class="nav-link" href="/">Home</a>
+            {% endif %}
+
+            {% if page.active == "services" %}
+              <a class="nav-link active" href="#">Services</a>
+            {% else %}
+              <a class="nav-link" href="/">Services</a>
+            {% endif %}
+
+            {% if page.active == "employment" %}
+              <a class="nav-link active" href="#">Employment</a>
+            {% else %}
+              <a class="nav-link" href="/">Employment</a>
+            {% endif %}
+
+            {% if page.active == "contact" %}
+              <a class="nav-link active" href="#">Contact</a>
+            {% else %}
+              <a class="nav-link" href="/">Contact</a>
+            {% endif %}
+
+          </nav>
+        </section>
+
+      </div>
+    </nav>
+    <!-- /.navbar -->
+
+    {{ content }}
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="container">
+        <div class="row gap-y align-items-center">
+
+          <div class="col-md-3 text-center text-md-left">
+            <a href="#"><img src="../assets/img/dark_logo_transparent.png" alt="logo"></a>
+            <small>Made with ❤ in Chicago.</small>
+          </div>
+
+          <div class="col-md-9">
+            <div class="nav nav-bold nav-uppercase justify-content-center justify-content-md-end">
+              <a class="nav-link" href="#">Home</a>
+              <a class="nav-link" href="#">Services</a>
+              <a class="nav-link" href="#">Employment</a>
+              <a class="nav-link" href="#">Contact</a>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </footer>
+    <!-- /.footer -->
+
+    <!-- Scripts -->
+    <script src={{ "/assets/js/page.min.js" | absolute_url }}></script>
+    <script src={{ "/assets/js/script.js" | absolute_url }}></script>
   </body>
 </html>
