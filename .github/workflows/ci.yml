@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Prepare clean CI destination
+        run: rm -rf ./_ci_site
+
+      - name: Build Jekyll site
+        uses: actions/jekyll-build-pages@44a6e6beabd48582f863aeeb6cb2151cc1716697
+        with:
+          source: .
+          destination: ./_ci_site
+
+      - name: Prove generated pages and assets are rendered
+        run: |
+          set -euo pipefail
+
+          # Validate only the fresh, untracked destination. The legacy tracked
+          # _site tree must never be able to satisfy these checks.
+          test -d ./_ci_site
+          for page in index.html services.html employment.html contact.html; do
+            output="./_ci_site/${page}"
+            test -s "${output}"
+            grep -Fq '<!DOCTYPE html>' "${output}"
+            grep -Fq '<html>' "${output}"
+            grep -Fqi 'Book Runners' "${output}"
+          done
+
+          for asset in \
+            assets/css/page.min.css \
+            assets/js/script.js \
+            assets/img/dark_logo_transparent.png; do
+            test -s "./_ci_site/${asset}"
+          done
