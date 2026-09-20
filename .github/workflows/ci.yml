@@ -47,7 +47,6 @@ jobs:
 
           for asset in \
             assets/css/page.min.css \
-            assets/css/style.css \
             assets/js/script.js \
             assets/img/dark_logo_transparent.png; do
             test -s "./_ci_site/${asset}"
