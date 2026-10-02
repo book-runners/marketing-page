@@ -53,6 +53,7 @@ tmp=$(mktemp -d)
 pushed=0
 run_id=
 finished=0
+# shellcheck disable=SC2317  # run by the EXIT trap
 cleanup() {
   status=$?
   trap - EXIT INT TERM
