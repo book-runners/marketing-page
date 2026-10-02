@@ -1,0 +1,51 @@
+# Dispatched by scripts/check on its check/<task> snapshot branch. This public
+# repository cannot call agent_repository's private reusable workflow and must
+# not use the workspace host's self-hosted runners, so it runs ci.yml's Jekyll
+# build on a GitHub-hosted runner (free for public repositories). The site has
+# no tests, so the files input is accepted and ignored.
+name: Agent check
+
+on:
+  workflow_dispatch:
+    inputs:
+      files:
+        description: Ignored (this site has no tests); kept for scripts/check
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Build Jekyll site
+        uses: actions/jekyll-build-pages@44a6e6beabd48582f863aeeb6cb2151cc1716697
+        with:
+          source: .
+          destination: ./_ci_site
+
+      - name: Prove generated pages and assets are rendered
+        run: |
+          set -euo pipefail
+          for page in index.html services.html employment.html contact.html; do
+            output="./_ci_site/${page}"
+            test -s "${output}"
+            grep -Fq '<!DOCTYPE html>' "${output}"
+            grep -Fq '<html>' "${output}"
+            grep -Fqi 'Book Runners' "${output}"
+          done
+          for asset in assets/css/page.min.css assets/js/script.js assets/img/dark_logo_transparent.png; do
+            test -s "./_ci_site/${asset}"
+          done

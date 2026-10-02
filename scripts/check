@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# scripts/check: run this repository's fast checks on the Book Runners workspace
+# host from any machine that has only git and the GitHub CLI (gh auth login).
+#
+#   scripts/check                       push-tier static checks
+#   scripts/check tests/test_x.py ...   focused tests (paths relative to here)
+#   scripts/check --dry-run [FILES]     snapshot only: print what would be pushed
+#                                       and dispatched; no network, no gh
+#
+# The working tree (HEAD, staged and unstaged edits, untracked not-ignored files;
+# untracked *.log, .env* and files over 5 MB stay behind with a warning) becomes
+# a commit object built in a throwaway index: your branch, index and files are
+# never touched. It is force-pushed to check/<branch>-<6 hex>, the agent-check
+# workflow runs `br-workspace ci-check` on it on the workspace host, the failed
+# log is printed on failure, the check branch is deleted, and the exit code is
+# the check's (2 = usage or setup error). Nothing runs on this machine. Hosted
+# CI on the pull request remains the gate of record.
+set -euo pipefail
+
+dry_run=0
+if [ "${1:-}" = "--dry-run" ]; then dry_run=1; shift; fi
+case "${1:-}" in -h | --help) sed -n '2,17p' "$0"; exit 0 ;; esac
+
+die() { echo "check: $*" >&2; exit 2; }
+say() { echo "check: $*" >&2; }
+
+top=$(git rev-parse --show-toplevel 2>/dev/null) || die "run inside a git checkout."
+prefix=$(git rev-parse --show-prefix)
+url=$(git -C "$top" config --get remote.origin.url) || die "this checkout has no origin remote."
+[[ "$url" =~ github\.com[:/]([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/?$ ]] || die "origin is not a GitHub repository: $url"
+slug_repo="${BASH_REMATCH[1]}/${BASH_REMATCH[2]%.git}"
+
+files=()
+for f in "$@"; do
+  path="${prefix}${f//\\//}"
+  [[ "$path" =~ ^[A-Za-z0-9_.][A-Za-z0-9_./-]*$ && "/$path/" != */../* ]] || die "unsupported file path: $f"
+  files+=("$path")
+done
+cd "$top"
+
+# check/<branch, lowercased, other runs as '-', 41 chars max>-<6 hex>: the hex
+# hashes the branch, checkout path and machine, so two checkouts never cancel
+# each other's run while a repeated check from one checkout supersedes its last.
+branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null) || branch="detached-$(git rev-parse --short=12 HEAD)"
+slug=$(printf '%s' "$branch" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
+[[ "$slug" =~ ^[a-z] ]] || slug="t-$slug"
+slug=${slug:0:41}
+slug=${slug%-}
+hex=$(printf '%s\n%s\n%s\n' "$branch" "$top" "${HOSTNAME:-}" | git hash-object --stdin | cut -c1-6)
+ref="check/$slug-$hex"
+
+tmp=$(mktemp -d)
+pushed=0
+run_id=
+finished=0
+cleanup() {
+  status=$?
+  trap - EXIT INT TERM
+  if [ -n "$run_id" ] && [ "$finished" = 0 ]; then
+    gh run cancel "$run_id" --repo "$slug_repo" >/dev/null 2>&1 || true
+  fi
+  if [ "$pushed" = 1 ]; then
+    git_gh push --quiet "$push_url" --delete "refs/heads/$ref" >/dev/null 2>&1 || say "could not delete $ref (harmless; it is overwritten next time)."
+  fi
+  rm -rf "$tmp"
+  exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+# Authenticate pushes with gh, whatever credential helper this machine has.
+git_gh() { git -c credential.helper= -c 'credential.helper=!gh auth git-credential' "$@"; }
+
+# Snapshot in a copy of the index, so the real one is never written.
+index="$tmp/index"
+real_index=$(git rev-parse --git-path index)
+if [ -f "$real_index" ]; then cp "$real_index" "$index"; fi
+GIT_INDEX_FILE="$index" git add --update
+ship=()
+while IFS= read -r -d '' name; do
+  leaf=${name##*/}
+  if [[ "$leaf" == *.log || "$leaf" == .env* ]]; then
+    say "not shipping untracked $name (log/.env file; git add it to ship it)"
+  elif [ -L "$name" ]; then
+    ship+=("$name")
+  elif [ ! -f "$name" ]; then
+    say "not shipping untracked $name (not a regular file)"
+  elif [ "$(wc -c <"$name")" -gt 5242880 ]; then
+    say "not shipping untracked $name (larger than 5 MB)"
+  else
+    ship+=("$name")
+  fi
+done < <(git ls-files -z --others --exclude-standard)
+if [ "${#ship[@]}" -gt 0 ]; then
+  printf '%s\0' "${ship[@]}" | GIT_INDEX_FILE="$index" git --literal-pathspecs add --pathspec-from-file=- --pathspec-file-nul
+fi
+tree=$(GIT_INDEX_FILE="$index" git write-tree)
+export GIT_AUTHOR_NAME=scripts-check GIT_AUTHOR_EMAIL=scripts-check@invalid
+export GIT_COMMITTER_NAME=scripts-check GIT_COMMITTER_EMAIL=scripts-check@invalid
+if head=$(git rev-parse --quiet --verify 'HEAD^{commit}'); then
+  if [ "$tree" = "$(git rev-parse 'HEAD^{tree}')" ]; then
+    commit=$head  # clean: check the real commit
+  else
+    commit=$(git commit-tree "$tree" -p "$head" -m "scripts/check snapshot of $branch")
+  fi
+else
+  commit=$(git commit-tree "$tree" -m "scripts/check snapshot of $branch (no commits yet)")
+fi
+
+push_url="https://github.com/$slug_repo.git"
+say "$slug_repo $branch: snapshot $commit (${#ship[@]} untracked file(s) shipped)"
+if [ "$dry_run" = 1 ]; then
+  echo "would push: $commit -> $push_url refs/heads/$ref"
+  echo "would run: gh workflow run agent-check.yml --repo $slug_repo --ref $ref -f files=${files[*]:-}"
+  exit 0
+fi
+command -v gh >/dev/null || die "install the GitHub CLI (gh) and run gh auth login."
+
+started=$SECONDS
+# The newest earlier run on this ref, looked up while the push runs, tells the
+# new run apart without trusting this machine's clock.
+gh run list --repo "$slug_repo" --workflow agent-check.yml --branch "$ref" --limit 1 \
+  --json databaseId --jq '.[0].databaseId // ""' >"$tmp/previous" 2>/dev/null &
+pushed=1
+git_gh push --quiet --force "$push_url" "$commit:refs/heads/$ref" || die "could not push $ref (gh auth login?)."
+wait || true
+previous=$(cat "$tmp/previous" 2>/dev/null || true)
+gh workflow run agent-check.yml --repo "$slug_repo" --ref "$ref" -f "files=${files[*]:-}" >/dev/null ||
+  die "could not dispatch agent-check.yml (is it on the default branch?)."
+for _ in $(seq 1 30); do
+  run_id=$(gh run list --repo "$slug_repo" --workflow agent-check.yml --branch "$ref" --event workflow_dispatch \
+    --limit 1 --json databaseId --jq '.[0].databaseId // ""' 2>/dev/null || true)
+  if [ -n "$run_id" ] && [ "$run_id" != "$previous" ]; then break; fi
+  run_id=
+  sleep 2
+done
+[ -n "$run_id" ] || die "the dispatched run did not appear within a minute."
+say "running https://github.com/$slug_repo/actions/runs/$run_id (dispatched in $((SECONDS - started)) s)"
+conclusion=
+while [ -z "$conclusion" ]; do  # watch again if gh itself was interrupted
+  if [ -t 1 ]; then
+    gh run watch "$run_id" --repo "$slug_repo" --exit-status --interval 5 || true
+  else
+    gh run watch "$run_id" --repo "$slug_repo" --exit-status --interval 5 >/dev/null 2>&1 || true
+  fi
+  conclusion=$(gh run view "$run_id" --repo "$slug_repo" --json conclusion --jq .conclusion 2>/dev/null || true)
+  [ -n "$conclusion" ] || sleep 5
+done
+finished=1
+say "$conclusion after $((SECONDS - started)) s"
+[ "$conclusion" = success ] && exit 0
+log=$(gh run view "$run_id" --repo "$slug_repo" --log-failed 2>/dev/null || true)
+if [ -z "$log" ]; then
+  sleep 3
+  log=$(gh run view "$run_id" --repo "$slug_repo" --log-failed 2>/dev/null || true)
+fi
+printf '%s\n' "$log" | tail -n "${CHECK_LOG_LINES:-150}"
+exit 1

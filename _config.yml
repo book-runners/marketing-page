@@ -1,0 +1,3 @@
+# scripts/ holds agent tooling (scripts/check), not site content.
+exclude:
+  - scripts

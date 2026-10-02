@@ -1,0 +1,2 @@
+# scripts/check runs under bash on every OS, including Git for Windows.
+scripts/check text eol=lf
